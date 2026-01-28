@@ -1,6 +1,5 @@
 import express from 'express';
-import { open } from 'sqlite';
-import sqlite3 from 'sqlite3';
+import Database from 'better-sqlite3';
 import bcrypt from 'bcryptjs';
 
 const app = express();
@@ -8,15 +7,12 @@ const PORT = 3001;
 
 app.use(express.json());
 
-const db = await open({
-  filename: './database.db',
-  driver: sqlite3.Database
-});
+const db = new Database('./database.db');
 
 // Endpoint para instalar la tabla
-app.get('/install', async (req, res) => {
+app.get('/install', (req, res) => {
   try {
-    const row = await db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'");
+    const row = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").get();
     
     if (row) {
       return res.json([{ message: 'La tabla users ya existe', alreadyExists: true }]);
@@ -32,7 +28,7 @@ app.get('/install', async (req, res) => {
       )
     `;
     
-    await db.exec(createTable);
+    db.exec(createTable);
     res.json([{ message: 'Tabla users creada exitosamente', alreadyExists: false }]);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -40,9 +36,9 @@ app.get('/install', async (req, res) => {
 });
 
 // Get all users
-app.get('/users', async (req, res) => {
+app.get('/users', (req, res) => {
   try {
-    const users = await db.all('SELECT id, name, email, created_at FROM users');
+    const users = db.prepare('SELECT id, name, email, created_at FROM users').all();
     res.json(users);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -50,9 +46,9 @@ app.get('/users', async (req, res) => {
 });
 
 // Get user by ID
-app.get('/users/:id', async (req, res) => {
+app.get('/users/:id', (req, res) => {
   try {
-    const user = await db.get('SELECT id, name, email, created_at FROM users WHERE id = ?', req.params.id);
+    const user = db.prepare('SELECT id, name, email, created_at FROM users WHERE id = ?').get(req.params.id);
     
     if (!user) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
