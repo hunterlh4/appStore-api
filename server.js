@@ -70,8 +70,8 @@ app.post('/users', async (req, res) => {
   
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    const result = await db.run('INSERT INTO users (name, email, password) VALUES (?, ?, ?)', name, email, hashedPassword);
-    res.status(201).json([{ id: result.lastID }]);
+    const result = db.prepare('INSERT INTO users (name, email, password) VALUES (?, ?, ?)').run(name, email, hashedPassword);
+    res.status(201).json([{ id: result.lastInsertRowid }]);
   } catch (error) {
     if (error.message.includes('UNIQUE constraint failed')) {
       return res.status(400).json({ error: 'El email ya está registrado' });
@@ -86,7 +86,7 @@ app.put('/users/:id', async (req, res) => {
   const userId = req.params.id;
   
   try {
-    const user = await db.get('SELECT * FROM users WHERE id = ?', userId);
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
     
     if (!user) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
@@ -96,7 +96,7 @@ app.put('/users/:id', async (req, res) => {
     const updateEmail = email || user.email;
     const updatePassword = password ? await bcrypt.hash(password, 10) : user.password;
     
-    await db.run('UPDATE users SET name = ?, email = ?, password = ? WHERE id = ?', updateName, updateEmail, updatePassword, userId);
+    db.prepare('UPDATE users SET name = ?, email = ?, password = ? WHERE id = ?').run(updateName, updateEmail, updatePassword, userId);
     res.json([{ id: parseInt(userId), updated: true }]);
   } catch (error) {
     if (error.message.includes('UNIQUE constraint failed')) {
@@ -115,7 +115,7 @@ app.post('/login', async (req, res) => {
   }
   
   try {
-    const user = await db.get('SELECT * FROM users WHERE email = ?', email);
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
     
     if (!user) {
       return res.status(401).json({ error: 'Credenciales inválidas' });
@@ -147,13 +147,14 @@ app.get('/seed', async (req, res) => {
   
   try {
     const created = [];
+    const insertStmt = db.prepare('INSERT INTO users (name, email, password) VALUES (?, ?, ?)');
     
     for (const user of testUsers) {
       const hashedPassword = await bcrypt.hash(user.password, 10);
       
       try {
-        const result = await db.run('INSERT INTO users (name, email, password) VALUES (?, ?, ?)', user.name, user.email, hashedPassword);
-        created.push({ id: result.lastID, email: user.email, status: 'creado' });
+        const result = insertStmt.run(user.name, user.email, hashedPassword);
+        created.push({ id: result.lastInsertRowid, email: user.email, status: 'creado' });
       } catch (error) {
         if (error.message.includes('UNIQUE constraint failed')) {
           created.push({ email: user.email, status: 'ya existe' });
